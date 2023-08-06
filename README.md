@@ -1,4 +1,9 @@
-## llama2.c
+Work in Progress
+
+---
+The idea is to create an inference only python script that uses just python + numpy to do inference.
+Will update readme once I actually start coding.
+<!-- ## llama2.c
 
 <p align="center">
   <img src="assets/llama_cute.jpg" width="300" height="300" alt="Cute Llama">
@@ -252,4 +257,4 @@ If your candidate PRs have elements of these it doesn't mean they won't get merg
 
 ## License
 
-MIT
+MIT -->
