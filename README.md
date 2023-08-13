@@ -15,6 +15,8 @@ Please note that this started recently as just a fun weekend project: I took my 
 
 ## feel the magic
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/karpathy/llama2.c/blob/master/run.ipynb)
+
 First, navigate to the folder when you keep your projects and clone this repository to this folder:
 
 ```bash
@@ -59,7 +61,9 @@ You can also prompt the model with a prefix or a number of additional command li
 
 > One day, Lily met a Shoggoth. He was very shy, but was also very generous. Lily said “Hello Shoggy! Can I be your friend?” Shoggy was happy to have a friend and said “Yes, let’s explore the universe together!” So they set off on a journey to explore the universe. As they travelled, Shoggy was happy to explain to Lily about all the wonderful things in the universe. At the end of the day, Lily and Shoggy had gathered lots of wonderful things from the universe, and they both felt very proud. They promised to explore the universe as one big pair and to never stop being generous to each other.
 
-There is also an even better 110M param model available, see [models](#models). Quick note on sampling, the recommendation for good results is to use `-t 1.0 -p 0.9`, i.e. top-p sampling at 0.9 with temperature 1.0 (this is the default). To control the diversity of samples use either the temperature (i.e. vary `-t` between 0 and 1 and keep top-p off with `-p 0`) or the top-p value (i.e. vary `-p` between 0 and 1 and keep `-t 1`), but not both. Nice explainers on LLM sampling strategies include [this](https://peterchng.com/blog/2023/05/02/token-selection-strategies-top-k-top-p-and-temperature/), [this](https://docs.cohere.com/docs/controlling-generation-with-top-k-top-p) or [this](https://huggingface.co/blog/how-to-generate).
+There is also an even better 110M param model available, see [models](#models).
+
+Quick note on sampling, the recommendation for ~best results is to sample with `-t 1.0 -p 0.9`, i.e. temperature 1.0 (default) but also top-p sampling at 0.9 (not default!). The top-p sampling is turned off by default because it can run quite a bit slower. More generally, to control the diversity of samples use either the temperature (i.e. vary `-t` between 0 and 1 and keep top-p off with `-p 0`) or the top-p value (i.e. vary `-p` between 0 and 1 and keep `-t 1`), but not both. Nice explainers on LLM sampling strategies include [this](https://peterchng.com/blog/2023/05/02/token-selection-strategies-top-k-top-p-and-temperature/), [this](https://docs.cohere.com/docs/controlling-generation-with-top-k-top-p) or [this](https://huggingface.co/blog/how-to-generate).
 
 ## Meta's Llama 2 models
 
@@ -143,6 +147,49 @@ Which gives the same results. More detailed testing will be done in `test_all.py
 $ pytest
 ```
 
+## custom tokenizers
+
+In everything above, we've assumed the custom Lllama 2 tokenizer with 32,000 tokens. However, in many boutique LLMs, using vocabulary this big might be an overkill. If you have a small application you have in mind, you might be much better off training your own tokenizers. This can make everything nicer - with smaller vocabs your model has fewer parameters (because the token embedding table is a lot smaller), the inference is faster (because there are fewer tokens to predict), and your average sequence length per example could also get smaller (because the compression is a lot more efficient on your data). So let's see how we train a custom tokenizer.
+
+By default, to pretokenize the tinystories dataset we had to run, in order:
+
+```
+python tinystories.py download
+python tinystories.py pretokenize
+```
+
+The `pretokenize` stage here loads the Llama 2 tokenizer (vocab size 32,000) and uses it to convert the downloaded text into integers, and saves that to file. We now change this as follows, to train an example 4096-token tokenizer:
+
+```
+python tinystories.py download
+python tinystories.py train_vocab --vocab_size=4096
+python tinystories.py pretokenize --vocab_size=4096
+```
+
+The `train_vocab` stage will call the `train_vocab.sh` script, which calls the `sentencepiece` library to train the tokenizer, storing it in a new file `data/tok4096.model`. I tried to reproduce as well as I could the settings that (I think) Meta used to train their vocabulary. This uses the Byte Pair Encoding algorithm that starts out with raw utf8 byte sequences of the text data and then iteratively merges the most common consecutive pairs of tokens to form the vocabulary. Inspect the `tinystories.py` file - the custom tokenizers are stored in a special directory structure indexed by the vocab size.
+
+A quick note of interest is that vocab size of 4096 trained specifically on tinystories creates integer sequences with about the same sequence length per example as the default Llama 2 tokenizer of 32000 tokens! This means that our custom, tailored tokenizer is a lot better adapted to our specific text, and can compress it very effectively. So our trained models are smaller and faster.
+
+Now that we have pretokenized the dataset with our custom tokenizer, we can train the model. The training script `train.py` doesn't care about the exact tokens, it only cares about the vocabulary size so it can correctly initialize the model. So when training your model, make sure to pass in
+
+```
+python train.py --vocab_source=custom --vocab_size=4096
+```
+
+(The defaults are `llama2` and `32000` respectively, which indicates the default Llama 2 tokenizer). This trains the model. Finally we are ready to run inference with our `run.c` script. For that we need two things. Number one, we have to export our tokenizer in the `.bin` format, do that with:
+
+```
+python tokenizer.py --tokenizer-model=data/tok4096.model
+```
+
+This writes the tokenizer to `data/tok4096.bin`. Now we can run inference, pointing it to this tokenizer using the `-z` flag:
+
+```
+./run out/model.bin -z data/tok4096.bin
+```
+
+This should print the samples. If you leave out the `-z` flag, it will use the default Llama 2 tokenizer, which would generate a good sequence of integers, but they would get translated using a different vocabulary to text, so it would look like gibberish.
+
 ## performance
 
 There are many ways to potentially speed up this code depending on your system. Have a look at the [Makefile](Makefile), which contains a lot of notes. The `make run` command currently uses the `-O3` optimization by default, i.e.:
@@ -216,6 +263,8 @@ If your candidate PRs have elements of these it doesn't mean they won't get merg
 - Rust
   - [llama2.rs](https://github.com/gaxler/llama2.rs) by @[gaxler](https://github.com/gaxler): a Rust port of this project
   - [llama2.rs](https://github.com/leo-du/llama2.rs) by @[leo-du](https://github.com/leo-du): A Rust port of this project
+  - [llama2-rs](https://github.com/danielgrittner/llama2-rs) by @[danielgrittner](https://github.com/danielgrittner): a Rust port of this project
+  - [llama2.rs](https://github.com/lintian06/llama2.rs) by @[lintian06](https://github.com/lintian06): A Rust port of this project
 - Go
   - [go-llama2](https://github.com/tmc/go-llama2) by @[tmc](https://github.com/tmc): a Go port of this project
   - [llama2.go](https://github.com/nikolaydubina/llama2.go) by @[nikolaydubina](https://github.com/nikolaydubina): a Go port of this project
@@ -241,19 +290,25 @@ If your candidate PRs have elements of these it doesn't mean they won't get merg
   - [llama2.java](https://github.com/mukel/llama2.java) by @[mukel](https://github.com/mukel): a Java port of this project
 - Kotlin
   - [llama2.kt](https://github.com/madroidmaq/llama2.kt) by @[madroidmaq](https://github.com/madroidmaq): a Kotlin port of this project
+- Python
+  - [llama2.py](https://github.com/tairov/llama2.py) by @[tairov](https://github.com/tairov): a simple one file pure Python port of this project with zero dependencies
+- C#
+  - [llama2.cs](https://github.com/trrahul/llama2.cs) by @[trrahul](https://github.com/trrahul): a C# port of this project
+- WebAssembly
+  - [icpp-llm](https://github.com/icppWorld/icpp-llm): LLMs for the Internet Computer
 - [llama2.c - Llama 2 Everywhere](https://github.com/trholding/llama2.c) by @[trholding](https://github.com/trholding): Standalone, Bootable & Portable Binary Llama 2
-
 
 ## unsorted todos
 
-- should calculate freq_cis online in the script run.c instead of loading them
-- support Llama 2 7B Chat models and tune run.c to Chat UI/UX
-- speed up 7B Llama 2 models sufficiently to work at interactive rates on Apple Silicon MacBooks
-- investigate precisions other than just fp32: fp16, and quantization
-- investigate running on other backends, especially GPUs
+- revive tests; train a tiny Llama test model (committed to repo) and use it as reference in unit tests
+- make it easier to add a new dataset with not too much pain
 - add multiquery support into run.c
+- should calculate freq_cis online in the script run.c instead of loading them
+- int4/8 quantization
+- export the model in a more sensible output format with a proper header, etc.
+- support Llama 2 7B Chat models and tune run.c to Chat UI/UX
+- llama2.cu investigate and merge
 - (LoRA) finetuning and export of Llama 2 models
-- make more better tests to decrease yolo
 
 ## License
 
