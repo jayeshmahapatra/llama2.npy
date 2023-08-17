@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from model import Transformer
+from tokenizer import Tokenizer
 
 @dataclass
 class ModelArgs:
@@ -68,16 +69,22 @@ if __name__ == "__main__":
 
         # Create a new instance of the Transformer model
         transformer = Transformer(model_args)
+        transformer.eval()
 
         # Read and load weights
         def deserialize(t, f):
+            
             num_elements = t.numel()
             data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
+
             return torch.tensor(data).view(t.shape)
         
         with open(weight_filepath, 'rb') as f:
-            # Skip header and embedding weights
-            f.seek(header_size + 4 * dim * vocab_size, 0)
+            # Skip header
+            f.seek(header_size, 0)
+
+            # Load embedding weights
+            transformer.tok_embeddings.weight = nn.Parameter(deserialize(transformer.tok_embeddings.weight, f)) 
 
             # Load attention and ffn weights for each layer
             for layer in transformer.layers:
@@ -96,10 +103,59 @@ if __name__ == "__main__":
             transformer.norm.weight = nn.Parameter(deserialize(transformer.norm.weight, f))
 
             # Load freqs_cos and freqs_sin
-            transformer.freqs_cos = deserialize(torch.empty(max_seq_len), f)
-            transformer.freqs_sin = deserialize(torch.empty(max_seq_len), f)
+            head_size = dim // n_heads
+            transformer.freqs_cos = deserialize(torch.empty(max_seq_len, int(head_size/2)), f)
+            transformer.freqs_sin = deserialize(torch.empty(max_seq_len, int(head_size/2)), f)
         
         print("Weights loaded successfully")
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        checkpoint = os.path.join("./weights", "stories15M.pt")
+        checkpoint_dict = torch.load(checkpoint, map_location=device)
+        gptconf = ModelArgs(**checkpoint_dict['model_args'])
+        model = Transformer(gptconf)
+        state_dict = checkpoint_dict['model']
+        unwanted_prefix = '_orig_mod.'
+        for k,v in list(state_dict.items()):
+            if k.startswith(unwanted_prefix):
+                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+        model.load_state_dict(state_dict, strict=False)
+        model.eval()
+        model.to(device)
+
+        
+
+        transformer = transformer.to(device)
+
+        # Load the tokenizer
+        tokenizer_model = os.path.join("./", "tokenizer.model")
+        enc = Tokenizer(tokenizer_model=tokenizer_model)
+
+        # Encode the initial string
+        initial_string = "Once upon a time "
+        x = enc.encode(initial_string, bos=True, eos=False)
+        x = torch.tensor([x], dtype=torch.long, device=device) # 1 is BOS
+        
+        with torch.inference_mode():
+            y = transformer.generate(x, max_new_tokens=200, temperature=0.9)
+        pt_tokens = y[0].tolist()
+        
+        text = enc.decode(pt_tokens)
+
+        print(text)
+
+
+        with torch.inference_mode():
+            y = model.generate(x, max_new_tokens=200, temperature=0.9)
+        pt_tokens = y[0].tolist()
+
+        
+        text = enc.decode(pt_tokens)
+
+        print(text)
+
+
         
 
 
