@@ -102,6 +102,9 @@ if __name__ == "__main__":
         head_size = dim // n_heads
         transformer.freqs_cos = deserialize(torch.empty(max_seq_len, int(head_size/2)), f)
         transformer.freqs_sin = deserialize(torch.empty(max_seq_len, int(head_size/2)), f)
+
+        # Output classifier weights are shared with the embedding weights
+        transformer.output.weight = transformer.tok_embeddings.weight
     
     print("Weights loaded successfully")
 
@@ -121,50 +124,22 @@ if __name__ == "__main__":
     model.to(device)
 
     
-
+    transformer.eval()
     transformer = transformer.to(device)
 
     print(model_args)
     print(gptconf)
-
-    for i, layer in enumerate(model.layers):
-        transformer_layer = transformer.layers[i]
-
-        #Check if all the weights are the same
-        print("layer: ", i)
-        print("attention_norm: ", torch.allclose(layer.attention_norm.weight, transformer_layer.attention_norm.weight))
-        print("attention.wq: ", torch.allclose(layer.attention.wq.weight, transformer_layer.attention.wq.weight))
-        print("attention.wk: ", torch.allclose(layer.attention.wk.weight, transformer_layer.attention.wk.weight))
-        print("attention.wv: ", torch.allclose(layer.attention.wv.weight, transformer_layer.attention.wv.weight))
-        print("attention.wo: ", torch.allclose(layer.attention.wo.weight, transformer_layer.attention.wo.weight))
-        print("ffn_norm: ", torch.allclose(layer.ffn_norm.weight, transformer_layer.ffn_norm.weight))
-        print("feed_forward.w1: ", torch.allclose(layer.feed_forward.w1.weight, transformer_layer.feed_forward.w1.weight))
-        print("feed_forward.w2: ", torch.allclose(layer.feed_forward.w2.weight, transformer_layer.feed_forward.w2.weight))
-        print("feed_forward.w3: ", torch.allclose(layer.feed_forward.w3.weight, transformer_layer.feed_forward.w3.weight))
-    
-    print("norm: ", torch.allclose(model.norm.weight, transformer.norm.weight))
-    print("tok_embeddings: ", torch.allclose(model.tok_embeddings.weight, transformer.tok_embeddings.weight))
-    print("freqs_cos: ", torch.allclose(model.freqs_cos, transformer.freqs_cos))
-    print("freqs_sin: ", torch.allclose(model.freqs_sin, transformer.freqs_sin))
 
     for p1, p2 in zip(model.parameters(), transformer.parameters()):
         if p1.data.ne(p2.data).sum() > 0:
             print("Models are not equal")
     print("Models are equal")
 
-    # for i in range(288):
-
-    #     # Get the ith element of attention.wq.weight first row
-    #     transformer_wq = transformer.layers[0].attention.wq.weight[0,i]
-
-    #     # Find if there is a matching element in the model attention.wq.weight anywhere
-    #     matching_model_wg_idx = (torch.isclose(model.layers[0].attention.wq.weight, transformer_wq)).nonzero(as_tuple=True)
-        
-    #     print(transformer_wq)
-    #     print("transformer_wq_idx: ", (0,i))
-    #     print("matching_model_wg_idx: ", matching_model_wg_idx)
-
-
+    # iterate over state_dict of model and transformer and compare
+    for (k1, v1), (k2, v2) in zip(model.state_dict().items(), transformer.state_dict().items()):
+        if v1.data.ne(v2.data).sum() > 0:
+            #print what is different
+            print("Different: ", k1, k2)
 
     # Load the tokenizer
     tokenizer_model = os.path.join("./", "tokenizer.model")
@@ -175,6 +150,7 @@ if __name__ == "__main__":
     x = enc.encode(initial_string, bos=True, eos=False)
     x = torch.tensor([x], dtype=torch.long, device=device) # 1 is BOS
     
+    print("\nBin model")
     with torch.inference_mode():
         y = transformer.generate(x, max_new_tokens=200, temperature=0.9)
     pt_tokens = y[0].tolist()
@@ -183,7 +159,7 @@ if __name__ == "__main__":
 
     print(text)
 
-
+    print("\nPytorch model")
     with torch.inference_mode():
         y = model.generate(x, max_new_tokens=200, temperature=0.9)
     pt_tokens = y[0].tolist()
