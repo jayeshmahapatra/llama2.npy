@@ -5,7 +5,7 @@ The idea is to create an inference only python script that uses just python + nu
 
 To do:
 
-- [ ] Read weights off of bin files and store them into numpy arrays
+- [ ] Read weights off of bin files and store them into torch tensors in python
 - [ ] Update torch tensors using read weights and able to perform full inference
 - [ ] Reimplement torch specific functions ( like activations ) using pure matrix operations in torch
 - [ ] Port all torch tensors to numpy and all matrix operations to numpy

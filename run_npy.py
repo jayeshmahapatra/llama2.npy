@@ -110,36 +110,36 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    checkpoint = os.path.join("./weights", "stories15M.pt")
-    checkpoint_dict = torch.load(checkpoint, map_location=device)
-    gptconf = ModelArgs(**checkpoint_dict['model_args'])
-    model = Transformer(gptconf)
-    state_dict = checkpoint_dict['model']
-    unwanted_prefix = '_orig_mod.'
-    for k,v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict, strict=False)
-    model.eval()
-    model.to(device)
+    # checkpoint = os.path.join("./weights", "stories15M.pt")
+    # checkpoint_dict = torch.load(checkpoint, map_location=device)
+    # gptconf = ModelArgs(**checkpoint_dict['model_args'])
+    # model = Transformer(gptconf)
+    # state_dict = checkpoint_dict['model']
+    # unwanted_prefix = '_orig_mod.'
+    # for k,v in list(state_dict.items()):
+    #     if k.startswith(unwanted_prefix):
+    #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    # model.load_state_dict(state_dict, strict=False)
+    # model.eval()
+    # model.to(device)
 
     
     transformer.eval()
     transformer = transformer.to(device)
 
     print(model_args)
-    print(gptconf)
+    # print(gptconf)
 
-    for p1, p2 in zip(model.parameters(), transformer.parameters()):
-        if p1.data.ne(p2.data).sum() > 0:
-            print("Models are not equal")
-    print("Models are equal")
+    # for p1, p2 in zip(model.parameters(), transformer.parameters()):
+    #     if p1.data.ne(p2.data).sum() > 0:
+    #         print("Models are not equal")
+    # print("Models are equal")
 
-    # iterate over state_dict of model and transformer and compare
-    for (k1, v1), (k2, v2) in zip(model.state_dict().items(), transformer.state_dict().items()):
-        if v1.data.ne(v2.data).sum() > 0:
-            #print what is different
-            print("Different: ", k1, k2)
+    # # iterate over state_dict of model and transformer and compare
+    # for (k1, v1), (k2, v2) in zip(model.state_dict().items(), transformer.state_dict().items()):
+    #     if v1.data.ne(v2.data).sum() > 0:
+    #         #print what is different
+    #         print("Different: ", k1, k2)
 
     # Load the tokenizer
     tokenizer_model = os.path.join("./", "tokenizer.model")
@@ -159,15 +159,15 @@ if __name__ == "__main__":
 
     print(text)
 
-    print("\nPytorch model")
-    with torch.inference_mode():
-        y = model.generate(x, max_new_tokens=200, temperature=0.9)
-    pt_tokens = y[0].tolist()
+    # print("\nPytorch model")
+    # with torch.inference_mode():
+    #     y = model.generate(x, max_new_tokens=200, temperature=0.9)
+    # pt_tokens = y[0].tolist()
 
     
-    text = enc.decode(pt_tokens)
+    # text = enc.decode(pt_tokens)
 
-    print(text)
+    # print(text)
 
 
         
