@@ -9,13 +9,15 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from model import Transformer, ModelArgs
+from model_npy import Transformer, ModelArgs
 from tokenizer import Tokenizer
 
 if __name__ == "__main__":
     
     # Add a command line parser
     parser = argparse.ArgumentParser(description='Run the llama2 using just numpy')
+    # Optional input prompt with default value
+    parser.add_argument("-i", '--input', type=str, help='Input Prompt', default="Once upon a time")
     required_args = parser.add_argument_group('Required arguments')
     required_args.add_argument("-w", '--weight', type=str, help='Path to bin file containing the weights', required=True)
     args = parser.parse_args()
@@ -41,19 +43,19 @@ if __name__ == "__main__":
         header = struct.unpack('iiiiiii', f.read(header_size))
         dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, max_seq_len = header
 
-        print("dim: {dim} hidden_dim: {hidden_dim} n_layers: {n_layers} n_heads: {n_heads} n_kv_heads: {n_kv_heads} vocab_size: {vocab_size} max_seq_len: {max_seq_len}".format(
-            dim=dim, 
-            hidden_dim=hidden_dim, 
-            n_layers=n_layers, 
-            n_heads=n_heads, 
-            n_kv_heads=n_kv_heads, 
-            vocab_size=vocab_size, 
-            max_seq_len=max_seq_len))
+        # print("dim: {dim} hidden_dim: {hidden_dim} n_layers: {n_layers} n_heads: {n_heads} n_kv_heads: {n_kv_heads} vocab_size: {vocab_size} max_seq_len: {max_seq_len}".format(
+        #     dim=dim, 
+        #     hidden_dim=hidden_dim, 
+        #     n_layers=n_layers, 
+        #     n_heads=n_heads, 
+        #     n_kv_heads=n_kv_heads, 
+        #     vocab_size=vocab_size, 
+        #     max_seq_len=max_seq_len))
         
         # Create a model args object
         model_args = ModelArgs(dim=dim, n_layers=n_layers, n_heads=n_heads, n_kv_heads=n_kv_heads, vocab_size=vocab_size, max_seq_len=max_seq_len, multiple_of=32)
 
-        print(model_args)
+        #print(model_args)
 
     # Create a new instance of the Transformer model
     transformer = Transformer(model_args)
@@ -66,6 +68,16 @@ if __name__ == "__main__":
         data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
 
         return torch.tensor(data).view(t.shape)
+    
+    
+    # Function to desirialize the weights as numpy arrays
+    def deserialize_np(t: np.ndarray, f):
+        
+        num_elements = t.size
+        data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
+
+        return np.array(data).reshape(t.shape)
+    
     
     with open(weight_filepath, 'rb') as f:
         # Skip header
@@ -109,48 +121,20 @@ if __name__ == "__main__":
     print("Weights loaded successfully")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # checkpoint = os.path.join("./weights", "stories15M.pt")
-    # checkpoint_dict = torch.load(checkpoint, map_location=device)
-    # gptconf = ModelArgs(**checkpoint_dict['model_args'])
-    # model = Transformer(gptconf)
-    # state_dict = checkpoint_dict['model']
-    # unwanted_prefix = '_orig_mod.'
-    # for k,v in list(state_dict.items()):
-    #     if k.startswith(unwanted_prefix):
-    #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    # model.load_state_dict(state_dict, strict=False)
-    # model.eval()
-    # model.to(device)
-
     
     transformer.eval()
     transformer = transformer.to(device)
-
-    print(model_args)
-    # print(gptconf)
-
-    # for p1, p2 in zip(model.parameters(), transformer.parameters()):
-    #     if p1.data.ne(p2.data).sum() > 0:
-    #         print("Models are not equal")
-    # print("Models are equal")
-
-    # # iterate over state_dict of model and transformer and compare
-    # for (k1, v1), (k2, v2) in zip(model.state_dict().items(), transformer.state_dict().items()):
-    #     if v1.data.ne(v2.data).sum() > 0:
-    #         #print what is different
-    #         print("Different: ", k1, k2)
 
     # Load the tokenizer
     tokenizer_model = os.path.join("./", "tokenizer.model")
     enc = Tokenizer(tokenizer_model=tokenizer_model)
 
     # Encode the initial string
-    initial_string = "Once upon a time "
+    initial_string = args.input
     x = enc.encode(initial_string, bos=True, eos=False)
     x = torch.tensor([x], dtype=torch.long, device=device) # 1 is BOS
     
-    print("\nBin model")
+    #print("\nBin model")
     with torch.inference_mode():
         y = transformer.generate(x, max_new_tokens=200, temperature=0.9)
     pt_tokens = y[0].tolist()
@@ -158,16 +142,6 @@ if __name__ == "__main__":
     text = enc.decode(pt_tokens)
 
     print(text)
-
-    # print("\nPytorch model")
-    # with torch.inference_mode():
-    #     y = model.generate(x, max_new_tokens=200, temperature=0.9)
-    # pt_tokens = y[0].tolist()
-
-    
-    # text = enc.decode(pt_tokens)
-
-    # print(text)
 
 
         
