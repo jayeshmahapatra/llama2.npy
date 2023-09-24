@@ -54,15 +54,20 @@ def reshape_for_broadcast(freqs_cis: np.ndarray, x: np.ndarray):
     return freqs_cis.reshape(shape)
 
 def apply_rotary_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
-    freqs_cos: torch.Tensor,
-    freqs_sin: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    xq: np.ndarray,
+    xk: np.ndarray,
+    freqs_cos: np.ndarray,
+    freqs_sin: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
 
     # reshape xq and xk to match the complex representation
-    xq_r, xq_i = xq.float().reshape(xq.shape[:-1] + (-1, 2)).unbind(-1)
-    xk_r, xk_i = xk.float().reshape(xk.shape[:-1] + (-1, 2)).unbind(-1)
+    xq_reshaped = xq.float().reshape(xq.shape[:-1] + (-1, 2))
+    xq_r = xq_reshaped[..., 0]
+    xq_i = xq_reshaped[..., 1]
+    
+    xk_reshaped = xk.float().reshape(xk.shape[:-1] + (-1, 2))
+    xk_r = xk_reshaped[..., 0]
+    xk_i = xk_reshaped[..., 1]
 
     # reshape freqs_cos and freqs_sin for broadcasting
     freqs_cos = reshape_for_broadcast(freqs_cos, xq_r)
@@ -75,10 +80,16 @@ def apply_rotary_emb(
     xk_out_i = xk_r * freqs_sin + xk_i * freqs_cos
 
     # flatten last two dimensions
-    xq_out = torch.stack([xq_out_r, xq_out_i], dim=-1).flatten(3)
-    xk_out = torch.stack([xk_out_r, xk_out_i], dim=-1).flatten(3)
+    xq_out_stacked = np.stack([xq_out_r, xq_out_i], axis=-1)
+    xk_out_stacked = np.stack([xk_out_r, xk_out_i], axis=-1)
 
-    return xq_out.type_as(xq), xk_out.type_as(xk)
+    xq_out = xq_out_stacked.reshape(xq.shape)
+    xk_out = xk_out_stacked.reshape(xk.shape)
+    
+    xq_out = torch.stack([xq_out_r, xq_out_i], dim=-1).reshape(xq_out.shape[:3] + (-1,))
+    xk_out = torch.stack([xk_out_r, xk_out_i], dim=-1).reshape(xk_out.shape[:3] + (-1,))
+
+    return xq_out.astype(xq.dtype), xk_out.astype(xk.dtype)
 
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     """torch.repeat_interleave(x, dim=2, repeats=n_rep)"""
@@ -86,8 +97,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     if n_rep == 1:
         return x
     return (
-        x[:, :, :, None, :]
-        .expand(bs, slen, n_kv_heads, n_rep, head_dim)
+        np.broadcast_to(x[:, :, :, None, :], (bs, slen, n_kv_heads, n_rep, head_dim))
         .reshape(bs, slen, n_kv_heads * n_rep, head_dim)
     )
 
