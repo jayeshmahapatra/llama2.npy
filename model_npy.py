@@ -56,6 +56,19 @@ class NumpyLinear:
             return np.dot(x, self.weight.T) + self.bias
         else:
             return np.dot(x, self.weight.T)
+        
+# Define a numpy based Token Embedding class
+class NumpyEmbedding:
+    def __init__(self, vocab_size: int, dim: int):
+        self.weight = np.random.randn(vocab_size, dim)
+
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        return self.forward(x)
+
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        # x is of size (bsz, seqlen), so the output will be of size (bsz, seqlen, dim)
+        return self.weight[x]
+
 
 # Define a numpy based dropout class
 class NumpyDropout:
@@ -81,6 +94,8 @@ def NumpySigmoid(x: np.ndarray) -> np.ndarray:
 # Numpy based silu function
 def NumpySilu(x: np.ndarray) -> np.ndarray:
     return x * NumpySigmoid(x)
+
+
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
@@ -257,7 +272,7 @@ class Transformer(nn.Module):
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
 
-        self.tok_embeddings = np.random.randn(params.vocab_size, params.dim)
+        self.tok_embeddings = NumpyEmbedding(params.vocab_size, params.dim)
         self.dropout = NumpyDropout(params.dropout)
         
         self.layers = []
@@ -268,7 +283,8 @@ class Transformer(nn.Module):
         self.output = NumpyLinear(params.dim, params.vocab_size, bias=False)
 
         # share the unembedding parameters with the embedding parameters
-        self.tok_embeddings.weight = self.output.weight # https://paperswithcode.com/method/weight-tying
+        # self.tok_embeddings.weight = self.output.weight # https://paperswithcode.com/method/weight-tying
+        self.output.weight = self.tok_embeddings.weight.T
 
         # some useful precompute for the RoPE relative positional embeddings
         self.freqs_cos, self.freqs_sin = precompute_freqs_cis(self.params.dim // self.params.n_heads, self.params.max_seq_len)
@@ -281,7 +297,8 @@ class Transformer(nn.Module):
     def load_weights():
         pass
 
-    def forward(self, tokens: torch.Tensor, targets: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, tokens: np.ndarray) -> np.ndarray:
+
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         h = self.dropout(h)
@@ -297,6 +314,21 @@ class Transformer(nn.Module):
         self.last_loss = None
 
         return logits
+    
+    def numpy_topk_by_partition(input, k, axis=None, ascending=True):
+        if not ascending:
+            input *= -1
+        ind = np.argpartition(input, k, axis=axis)
+        ind = np.take(ind, np.arange(k), axis=axis) # k non-sorted indices
+        input = np.take_along_axis(input, ind, axis=axis) # k non-sorted values
+
+        # sort within k elements
+        ind_part = np.argsort(input, axis=axis)
+        ind = np.take_along_axis(ind, ind_part, axis=axis)
+        if not ascending:
+            input *= -1
+        val = np.take_along_axis(input, ind_part, axis=axis) 
+        return ind, val
 
     @torch.inference_mode()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
@@ -314,16 +346,18 @@ class Transformer(nn.Module):
             logits = logits[:, -1, :] # crop to just the final time step
             if temperature == 0.0:
                 # "sample" the single most likely index
-                _, idx_next = torch.topk(logits, k=1, dim=-1)
+                _, idx_next = topk_by_partition(logits, k=1, axis=-1)
             else:
                 # pluck the logits at the final step and scale by desired temperature
                 logits = logits / temperature
                 # optionally crop the logits to only the top k options
                 if top_k is not None:
-                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    #v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    v, _ = self.topk_by_partition(logits, k=min(top_k, logits.size(-1)), axis=-1)
+
                     logits[logits < v[:, [-1]]] = -float('Inf')
                 # apply softmax to convert logits to (normalized) probabilities
-                probs = F.softmax(logits, dim=-1)
+                probs = NumpySoftmax(logits, axis=-1)
                 idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
