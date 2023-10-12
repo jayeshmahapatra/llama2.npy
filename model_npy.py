@@ -5,9 +5,6 @@ from dataclasses import dataclass
 from typing import Any, Optional, Tuple
 
 import numpy as np
-import torch
-import torch.nn.functional as F
-from torch import nn
 
 @dataclass
 class ModelArgs:
@@ -36,7 +33,7 @@ class RMSNorm:
 
 
     def forward(self, x):
-        output = self._norm(x.astype(float)).astype(x.dtype)
+        output = self._norm(x).astype(x.dtype)
         return output * self.weight
     
     def __call__(self, x):
@@ -45,8 +42,8 @@ class RMSNorm:
 # Define a numpy based linear class
 class NumpyLinear:
     def __init__(self, in_features: int, out_features: int, bias=True):
-        self.weight = np.random.randn(out_features, in_features)
-        self.bias = np.random.randn(out_features) if bias else None
+        self.weight = np.random.randn(out_features, in_features).astype(np.float32)
+        self.bias = np.random.randn(out_features).astype(np.float32) if bias else None
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
         return self.forward(x)
@@ -60,7 +57,7 @@ class NumpyLinear:
 # Define a numpy based Token Embedding class
 class NumpyEmbedding:
     def __init__(self, vocab_size: int, dim: int):
-        self.weight = np.random.randn(vocab_size, dim)
+        self.weight = np.random.randn(vocab_size, dim).astype(np.float32)
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
         return self.forward(x)
@@ -83,25 +80,40 @@ class NumpyDropout:
         return x * (1/(1-self.p))
     
 # Numpy based softmax function
-def NumpySoftmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
+def numpy_softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     exp_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
     return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
 
 # Numpy based sigmoid function
-def NumpySigmoid(x: np.ndarray) -> np.ndarray:
+def numpy_sigmoid(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
 
 # Numpy based silu function
-def NumpySilu(x: np.ndarray) -> np.ndarray:
-    return x * NumpySigmoid(x)
+def numpy_silu(x: np.ndarray) -> np.ndarray:
+    return x * numpy_sigmoid(x)
+
+def numpy_topk_by_partition(input, k, axis=None, ascending=True):
+    if not ascending:
+        input *= -1
+    ind = np.argpartition(input, k, axis=axis)
+    ind = np.take(ind, np.arange(k), axis=axis) # k non-sorted indices
+    input = np.take_along_axis(input, ind, axis=axis) # k non-sorted values
+
+    # sort within k elements
+    ind_part = np.argsort(input, axis=axis)
+    ind = np.take_along_axis(ind, ind_part, axis=axis)
+    if not ascending:
+        input *= -1
+    val = np.take_along_axis(input, ind_part, axis=axis) 
+    return ind, val
 
 
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    freqs = 1.0 / (theta ** (np.arange(0, dim, 2, dtype=float)[: (dim // 2)].float() / dim))
-    t = np.arange(end, dtype=float)
-    freqs = np.outer(t, freqs).astype(float)
+    freqs = 1.0 / (theta ** (np.arange(0, dim, 2)[: (dim // 2)].astype(np.float32) / dim))
+    t = np.arange(end).astype(np.float32)
+    freqs = np.outer(t, freqs).astype(np.float32)
     freqs_cos = np.cos(freqs)
     freqs_sin = np.sin(freqs)
     return freqs_cos, freqs_sin
@@ -121,11 +133,11 @@ def apply_rotary_emb(
 ) -> Tuple[np.ndarray, np.ndarray]:
 
     # reshape xq and xk to match the complex representation
-    xq_reshaped = xq.float().reshape(xq.shape[:-1] + (-1, 2))
+    xq_reshaped = xq.astype(np.float32).reshape(xq.shape[:-1] + (-1, 2))
     xq_r = xq_reshaped[..., 0]
     xq_i = xq_reshaped[..., 1]
     
-    xk_reshaped = xk.float().reshape(xk.shape[:-1] + (-1, 2))
+    xk_reshaped = xk.astype(np.float32).reshape(xk.shape[:-1] + (-1, 2))
     xk_r = xk_reshaped[..., 0]
     xk_i = xk_reshaped[..., 1]
 
@@ -146,12 +158,12 @@ def apply_rotary_emb(
     xq_out = xq_out_stacked.reshape(xq.shape)
     xk_out = xk_out_stacked.reshape(xk.shape)
     
-    xq_out = torch.stack([xq_out_r, xq_out_i], dim=-1).reshape(xq_out.shape[:3] + (-1,))
-    xk_out = torch.stack([xk_out_r, xk_out_i], dim=-1).reshape(xk_out.shape[:3] + (-1,))
+    xq_out = np.stack([xq_out_r, xq_out_i], axis=-1).reshape(xq_out.shape[:3] + (-1,))
+    xk_out = np.stack([xk_out_r, xk_out_i], axis=-1).reshape(xk_out.shape[:3] + (-1,))
 
     return xq_out.astype(xq.dtype), xk_out.astype(xk.dtype)
 
-def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+def repeat_kv(x: np.ndarray, n_rep: int) -> np.ndarray:
     """torch.repeat_interleave(x, dim=2, repeats=n_rep)"""
     bs, slen, n_kv_heads, head_dim = x.shape
     if n_rep == 1:
@@ -181,8 +193,8 @@ class Attention():
 
         
         # create causal attention mask
-        mask = np.full((1, 1, args.max_seq_len, args.max_seq_len), float("-inf"))
-        mask = np.triu(mask, k=1)
+        mask = np.full((1, 1, args.max_seq_len, args.max_seq_len), float("-inf")).astype(np.float32)
+        mask = np.triu(mask, k=1).astype(np.float32)
         self.mask = mask
 
     def forward(
@@ -207,19 +219,19 @@ class Attention():
         xv = repeat_kv(xv, self.n_rep)  # (bs, seqlen, n_local_heads, head_dim)
 
         # make heads into a batch dimension
-        xq = xq.transpose(1, 2)  # (bs, n_local_heads, seqlen, head_dim)
-        xk = xk.transpose(1, 2)
-        xv = xv.transpose(1, 2)
+        xq = np.transpose(xq, (0,2,1,3)) # (bs, n_local_heads, seqlen, head_dim)
+        xk = np.transpose(xk, (0,2,1,3))
+        xv = np.transpose(xv, (0,2,1,3))
 
         # manual implementation
-        scores = np.matmul(xq, xk.transpose(2, 3)) / np.sqrt(self.head_dim)
+        scores = np.matmul(xq, np.transpose(xk, (0,1,3,2))) / np.sqrt(self.head_dim)
         scores = scores + self.mask[:, :, :seqlen, :seqlen]   # (bs, n_local_heads, seqlen, cache_len + seqlen)
-        scores = NumpySoftmax(scores, axis=-1)
+        scores = numpy_softmax(scores, axis=-1)
         scores = self.attn_dropout(scores)
         output = np.matmul(scores, xv)  # (bs, n_local_heads, seqlen, head_dim)
 
         # restore time as batch dimension and concat heads
-        output = output.transpose(1, 2).reshape(bsz, seqlen, -1)
+        output = np.transpose(output, (0,2,1,3)).reshape(bsz, seqlen, -1)
 
         # final projection into the residual stream
         output = self.wo(output)
@@ -238,7 +250,7 @@ class FeedForward():
         self.dropout = NumpyDropout(dropout)
 
     def forward(self, x):
-        return self.dropout(self.w2(NumpySilu(self.w1(x)) * self.w3(x)))
+        return self.dropout(self.w2(numpy_silu(self.w1(x)) * self.w3(x)))
 
 
 class TransformerBlock():
@@ -262,9 +274,12 @@ class TransformerBlock():
         h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin)
         out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out
+    
+    def __call__(self, x, freqs_cos, freqs_sin):
+        return self.forward(x, freqs_cos, freqs_sin)
 
 
-class Transformer(nn.Module):
+class Transformer:
 
     def __init__(self, params: ModelArgs):
         super().__init__()
@@ -289,14 +304,6 @@ class Transformer(nn.Module):
         # some useful precompute for the RoPE relative positional embeddings
         self.freqs_cos, self.freqs_sin = precompute_freqs_cis(self.params.dim // self.params.n_heads, self.params.max_seq_len)
 
-        # Load all the weights
-        self.load_weights()
-        
-
-
-    def load_weights():
-        pass
-
     def forward(self, tokens: np.ndarray) -> np.ndarray:
 
         _bsz, seqlen = tokens.shape
@@ -315,22 +322,10 @@ class Transformer(nn.Module):
 
         return logits
     
-    def numpy_topk_by_partition(input, k, axis=None, ascending=True):
-        if not ascending:
-            input *= -1
-        ind = np.argpartition(input, k, axis=axis)
-        ind = np.take(ind, np.arange(k), axis=axis) # k non-sorted indices
-        input = np.take_along_axis(input, ind, axis=axis) # k non-sorted values
+    def __call__(self, tokens: np.ndarray) -> np.ndarray:
+        return self.forward(tokens)
+    
 
-        # sort within k elements
-        ind_part = np.argsort(input, axis=axis)
-        ind = np.take_along_axis(ind, ind_part, axis=axis)
-        if not ascending:
-            input *= -1
-        val = np.take_along_axis(input, ind_part, axis=axis) 
-        return ind, val
-
-    @torch.inference_mode()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
@@ -340,78 +335,27 @@ class Transformer(nn.Module):
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.params.max_seq_len else idx[:, -self.params.max_seq_len:]
+            idx_cond = idx if idx.size <= self.params.max_seq_len else idx[:, -self.params.max_seq_len:]
             # forward the model to get the logits for the index in the sequence
             logits = self(idx_cond)
             logits = logits[:, -1, :] # crop to just the final time step
             if temperature == 0.0:
                 # "sample" the single most likely index
-                _, idx_next = topk_by_partition(logits, k=1, axis=-1)
+                _, idx_next = numpy_topk_by_partition(logits, k=1, axis=-1)
             else:
                 # pluck the logits at the final step and scale by desired temperature
                 logits = logits / temperature
                 # optionally crop the logits to only the top k options
                 if top_k is not None:
                     #v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                    v, _ = self.topk_by_partition(logits, k=min(top_k, logits.size(-1)), axis=-1)
+                    v, _ = numpy_topk_by_partition(logits, k=min(top_k, logits.size(-1)), axis=-1)
 
                     logits[logits < v[:, [-1]]] = -float('Inf')
                 # apply softmax to convert logits to (normalized) probabilities
-                probs = NumpySoftmax(logits, axis=-1)
-                idx_next = torch.multinomial(probs, num_samples=1)
+                probs = numpy_softmax(logits, axis=-1)
+                # sample from the distribution
+                idx_next = np.random.choice(self.params.vocab_size, p=probs.squeeze())
             # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
+            idx = np.concatenate((idx, np.array([idx_next]).reshape(1,-1)), axis=1)
 
         return idx
-
-    def export(self, filepath='model.bin'):
-        """export the model weights in fp32 into .bin file to be read from C"""
-        f = open(filepath, 'wb')
-
-        def serialize(t):
-            d = t.detach().cpu().view(-1).numpy().astype(np.float32)
-            b = struct.pack(f'{len(d)}f', *d)
-            f.write(b)
-
-        # first write out the header
-        hidden_dim = self.layers[0].feed_forward.w1.weight.shape[0]
-        p = self.params
-        n_kv_heads = p.n_heads if p.n_kv_heads is None else p.n_kv_heads
-        header = struct.pack('iiiiiii', p.dim, hidden_dim, p.n_layers, p.n_heads,
-                                       n_kv_heads, p.vocab_size, p.max_seq_len)
-        f.write(header)
-
-        # next write out the embedding weights
-        serialize(self.tok_embeddings.weight)
-
-        # now all the layers
-        # attention weights
-        for layer in self.layers:
-            serialize(layer.attention_norm.weight)
-        for layer in self.layers:
-            serialize(layer.attention.wq.weight)
-        for layer in self.layers:
-            serialize(layer.attention.wk.weight)
-        for layer in self.layers:
-            serialize(layer.attention.wv.weight)
-        for layer in self.layers:
-            serialize(layer.attention.wo.weight)
-        # ffn weights
-        for layer in self.layers:
-            serialize(layer.ffn_norm.weight)
-        for layer in self.layers:
-            serialize(layer.feed_forward.w1.weight)
-        for layer in self.layers:
-            serialize(layer.feed_forward.w2.weight)
-        for layer in self.layers:
-            serialize(layer.feed_forward.w3.weight)
-        # final rmsnorm
-        serialize(self.norm.weight)
-        # note: no need to write final classifier weights due to weight sharing
-        # freqs_cis
-        serialize(self.freqs_cos[:p.max_seq_len])
-        serialize(self.freqs_sin[:p.max_seq_len])
-
-        # write to binary file
-        f.close()
-        print(f"wrote {filepath}")

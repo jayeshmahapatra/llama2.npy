@@ -7,9 +7,9 @@ To do:
 
 - [X] Read weights off of bin files and store them into torch tensors in python
 - [X] Update torch tensors using read weights and able to perform full inference
-- [ ] Reimplement torch specific functions ( like activations ) using pure matrix operations in torch
-- [ ] Port all torch tensors to numpy and all matrix operations to numpy
-- [ ] Finalize inference, remove dependencies other than numpy and python
+- [X] Reimplement torch specific functions ( like activations ) using pure matrix operations in torch
+- [X] Port all torch tensors to numpy and all matrix operations to numpy
+- [X] Finalize inference, remove dependencies other than numpy and python
 
 
 <!-- ## llama2.c

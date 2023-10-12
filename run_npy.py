@@ -5,9 +5,6 @@ from dataclasses import dataclass
 from typing import Any, Optional, Tuple
 
 import numpy as np
-import torch
-import torch.nn.functional as F
-from torch import nn
 
 from model_npy import Transformer, ModelArgs
 from tokenizer import Tokenizer
@@ -59,15 +56,14 @@ if __name__ == "__main__":
 
     # Create a new instance of the Transformer model
     transformer = Transformer(model_args)
-    transformer.eval()
 
     # Read and load weights
-    def deserialize(t, f):
+    # def deserialize(t, f):
         
-        num_elements = t.numel()
-        data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
+    #     num_elements = t.numel()
+    #     data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
 
-        return torch.tensor(data).view(t.shape)
+    #     return torch.tensor(data).view(t.shape)
     
     
     # Function to desirialize the weights as numpy arrays
@@ -84,46 +80,42 @@ if __name__ == "__main__":
         f.seek(header_size, 0)
 
         # Load embedding weights
-        transformer.tok_embeddings.weight = nn.Parameter(deserialize(transformer.tok_embeddings.weight, f)) 
+        transformer.tok_embeddings.weight = deserialize_np(transformer.tok_embeddings.weight, f)
 
         # Load attention and ffn weights for each layer
         for layer in transformer.layers:
-            layer.attention_norm.weight = nn.Parameter(deserialize(layer.attention_norm.weight, f))
+            layer.attention_norm.weight = deserialize_np(layer.attention_norm.weight, f)
         for layer in transformer.layers:
-            layer.attention.wq.weight = nn.Parameter(deserialize(layer.attention.wq.weight, f))
+            layer.attention.wq.weight = deserialize_np(layer.attention.wq.weight, f)
         for layer in transformer.layers:
-            layer.attention.wk.weight = nn.Parameter(deserialize(layer.attention.wk.weight, f))
+            layer.attention.wk.weight = deserialize_np(layer.attention.wk.weight, f)
         for layer in transformer.layers:
-            layer.attention.wv.weight = nn.Parameter(deserialize(layer.attention.wv.weight, f))
+            layer.attention.wv.weight = deserialize_np(layer.attention.wv.weight, f)
         for layer in transformer.layers:
-            layer.attention.wo.weight = nn.Parameter(deserialize(layer.attention.wo.weight, f))
+            layer.attention.wo.weight = deserialize_np(layer.attention.wo.weight, f)
 
         for layer in transformer.layers:
-            layer.ffn_norm.weight = nn.Parameter(deserialize(layer.ffn_norm.weight, f))
+            layer.ffn_norm.weight = deserialize_np(layer.ffn_norm.weight, f)
         for layer in transformer.layers:
-            layer.feed_forward.w1.weight = nn.Parameter(deserialize(layer.feed_forward.w1.weight, f))
+            layer.feed_forward.w1.weight = deserialize_np(layer.feed_forward.w1.weight, f)
         for layer in transformer.layers:
-            layer.feed_forward.w2.weight = nn.Parameter(deserialize(layer.feed_forward.w2.weight, f))
+            layer.feed_forward.w2.weight = deserialize_np(layer.feed_forward.w2.weight, f)
         for layer in transformer.layers:
-            layer.feed_forward.w3.weight = nn.Parameter(deserialize(layer.feed_forward.w3.weight, f))
+            layer.feed_forward.w3.weight = deserialize_np(layer.feed_forward.w3.weight, f)
 
         # Load final RMSNorm weight
-        transformer.norm.weight = nn.Parameter(deserialize(transformer.norm.weight, f))
+        transformer.norm.weight = deserialize_np(transformer.norm.weight, f)
 
         # Load freqs_cos and freqs_sin
         head_size = dim // n_heads
-        transformer.freqs_cos = deserialize(torch.empty(max_seq_len, int(head_size/2)), f)
-        transformer.freqs_sin = deserialize(torch.empty(max_seq_len, int(head_size/2)), f)
+        transformer.freqs_cos = deserialize_np(np.empty((max_seq_len, int(head_size/2))), f)
+        transformer.freqs_sin = deserialize_np(np.empty((max_seq_len, int(head_size/2))), f)
 
         # Output classifier weights are shared with the embedding weights
         transformer.output.weight = transformer.tok_embeddings.weight
     
     print("Weights loaded successfully")
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    transformer.eval()
-    transformer = transformer.to(device)
 
     # Load the tokenizer
     tokenizer_model = os.path.join("./", "tokenizer.model")
@@ -132,11 +124,11 @@ if __name__ == "__main__":
     # Encode the initial string
     initial_string = args.input
     x = enc.encode(initial_string, bos=True, eos=False)
-    x = torch.tensor([x], dtype=torch.long, device=device) # 1 is BOS
+
+    x = np.array([x])
     
-    #print("\nBin model")
-    with torch.inference_mode():
-        y = transformer.generate(x, max_new_tokens=200, temperature=0.9)
+    y = transformer.generate(x, max_new_tokens=20, temperature=0.9)
+
     pt_tokens = y[0].tolist()
     
     text = enc.decode(pt_tokens)
