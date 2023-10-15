@@ -9,6 +9,8 @@ import numpy as np
 from model_npy import Transformer, ModelArgs
 from tokenizer import Tokenizer
 
+
+
 if __name__ == "__main__":
     
     # Add a command line parser
@@ -40,31 +42,11 @@ if __name__ == "__main__":
         header = struct.unpack('iiiiiii', f.read(header_size))
         dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, max_seq_len = header
 
-        # print("dim: {dim} hidden_dim: {hidden_dim} n_layers: {n_layers} n_heads: {n_heads} n_kv_heads: {n_kv_heads} vocab_size: {vocab_size} max_seq_len: {max_seq_len}".format(
-        #     dim=dim, 
-        #     hidden_dim=hidden_dim, 
-        #     n_layers=n_layers, 
-        #     n_heads=n_heads, 
-        #     n_kv_heads=n_kv_heads, 
-        #     vocab_size=vocab_size, 
-        #     max_seq_len=max_seq_len))
-        
         # Create a model args object
         model_args = ModelArgs(dim=dim, n_layers=n_layers, n_heads=n_heads, n_kv_heads=n_kv_heads, vocab_size=vocab_size, max_seq_len=max_seq_len, multiple_of=32)
 
-        #print(model_args)
-
     # Create a new instance of the Transformer model
     transformer = Transformer(model_args)
-
-    # Read and load weights
-    # def deserialize(t, f):
-        
-    #     num_elements = t.numel()
-    #     data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
-
-    #     return torch.tensor(data).view(t.shape)
-    
     
     # Function to desirialize the weights as numpy arrays
     def deserialize_np(t: np.ndarray, f):
@@ -113,9 +95,6 @@ if __name__ == "__main__":
 
         # Output classifier weights are shared with the embedding weights
         transformer.output.weight = transformer.tok_embeddings.weight
-    
-    print("Weights loaded successfully")
-
 
     # Load the tokenizer
     tokenizer_model = os.path.join("./", "tokenizer.model")

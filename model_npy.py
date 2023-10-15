@@ -31,7 +31,6 @@ class RMSNorm:
     def _norm(self, x):
         return x / np.sqrt(np.mean(np.power(x, 2), axis=-1, keepdims=True) + self.eps)
 
-
     def forward(self, x):
         output = self._norm(x).astype(x.dtype)
         return output * self.weight
@@ -107,9 +106,6 @@ def numpy_topk_by_partition(input, k, axis=None, ascending=True):
     val = np.take_along_axis(input, ind_part, axis=axis) 
     return ind, val
 
-
-
-
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     freqs = 1.0 / (theta ** (np.arange(0, dim, 2)[: (dim // 2)].astype(np.float32) / dim))
     t = np.arange(end).astype(np.float32)
@@ -163,6 +159,7 @@ def apply_rotary_emb(
 
     return xq_out.astype(xq.dtype), xk_out.astype(xk.dtype)
 
+
 def repeat_kv(x: np.ndarray, n_rep: int) -> np.ndarray:
     """torch.repeat_interleave(x, dim=2, repeats=n_rep)"""
     bs, slen, n_kv_heads, head_dim = x.shape
@@ -172,6 +169,7 @@ def repeat_kv(x: np.ndarray, n_rep: int) -> np.ndarray:
         np.broadcast_to(x[:, :, :, None, :], (bs, slen, n_kv_heads, n_rep, head_dim))
         .reshape(bs, slen, n_kv_heads * n_rep, head_dim)
     )
+
 
 class Attention():
     def __init__(self, args: ModelArgs):
@@ -238,7 +236,6 @@ class Attention():
         output = self.resid_dropout(output)
         return output
 
-
 class FeedForward():
     def __init__(self, dim: int, hidden_dim: int, multiple_of: int, dropout: float):
         super().__init__()
@@ -251,7 +248,6 @@ class FeedForward():
 
     def forward(self, x):
         return self.dropout(self.w2(numpy_silu(self.w1(x)) * self.w3(x)))
-
 
 class TransformerBlock():
     def __init__(self, layer_id: int, args: ModelArgs):
@@ -277,7 +273,7 @@ class TransformerBlock():
     
     def __call__(self, x, freqs_cos, freqs_sin):
         return self.forward(x, freqs_cos, freqs_sin)
-
+    
 
 class Transformer:
 
@@ -347,9 +343,8 @@ class Transformer:
                 logits = logits / temperature
                 # optionally crop the logits to only the top k options
                 if top_k is not None:
-                    #v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                    v, _ = numpy_topk_by_partition(logits, k=min(top_k, logits.size(-1)), axis=-1)
 
+                    v, _ = numpy_topk_by_partition(logits, k=min(top_k, logits.size(-1)), axis=-1)
                     logits[logits < v[:, [-1]]] = -float('Inf')
                 # apply softmax to convert logits to (normalized) probabilities
                 probs = numpy_softmax(logits, axis=-1)
