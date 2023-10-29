@@ -7,7 +7,7 @@ from typing import Any, Optional, Tuple
 import numpy as np
 
 from model_npy import Transformer, ModelArgs
-from tokenizer import Tokenizer
+from tokenizer_npy import Tokenizer
 
 
 
@@ -97,8 +97,9 @@ if __name__ == "__main__":
         transformer.output.weight = transformer.tok_embeddings.weight
 
     # Load the tokenizer
-    tokenizer_model = os.path.join("./", "tokenizer.model")
-    enc = Tokenizer(tokenizer_model=tokenizer_model)
+    tokenizer_model_path = os.path.join("./", "tokenizer.bin")
+    #enc = Tokenizer(tokenizer_model=tokenizer_model)
+    enc = Tokenizer(tokenizer_model_path)
 
     # Encode the initial string
     initial_string = args.input

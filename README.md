@@ -10,4 +10,4 @@ To do:
 - [X] Reimplement torch specific functions ( like activations ) using pure matrix operations in torch
 - [X] Port all torch tensors to numpy and all matrix operations to numpy
 - [X] Finalize inference, remove dependencies other than numpy and python
-- [ ] Port Tokenizer to Python
+- [X] Port Tokenizer to Python
