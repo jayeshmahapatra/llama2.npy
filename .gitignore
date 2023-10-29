@@ -1,11 +1,2 @@
-# Ignore bin files
-*.bin
-
-# Ignore pt files
-*.pt
-
-# Ignore compiled run
-run
-
 # Ignore pycache folder
 __pycache__/
