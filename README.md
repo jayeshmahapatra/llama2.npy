@@ -2,7 +2,13 @@
 
 This repository is a Python+[Numpy](https://numpy.org/doc/stable/index.html) port of [llama2.c](https://github.com/karpathy/llama2.c) by Andrej Karpathy.
 
-This repo includes an implementation of the baby LLama2 architecture and the accompanying tokenizer all using just Python and Numpy.The original code, model weights and tokenizer scores are also from Andrej Karpathy.
+This repo includes an implementation of the baby LLama2 architecture trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) and the accompanying tokenizer all using just Python and Numpy. The model weights and tokenizer scores are also from Andrej Karpathy.
+
+<figure>
+    <img src="media/llama2_npy_example_gif.gif"
+         alt="A gif of using the translation app to translate an advertisement poster">
+    <figcaption>Generating text from the baby LLama2 model</figcaption>
+</figure>
 
 ## Usage
 
