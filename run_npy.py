@@ -17,6 +17,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run the llama2 using just numpy')
     # Optional input prompt with default value
     parser.add_argument("-i", '--input', type=str, help='Input Prompt', default="Once upon a time")
+
+    # Add optional argument num_tokens that defaults to 20
+    parser.add_argument("-n", '--num_tokens', type=int, help='Number of tokens to generate', default=20)
+
     required_args = parser.add_argument_group('Required arguments')
     required_args.add_argument("-w", '--weight', type=str, help='Path to bin file containing the weights', required=True)
     args = parser.parse_args()
@@ -107,7 +111,7 @@ if __name__ == "__main__":
 
     x = np.array([x])
     
-    y = transformer.generate(x, max_new_tokens=20, temperature=0.9)
+    y = transformer.generate(x, max_new_tokens=args.num_tokens, temperature=0.9)
 
     pt_tokens = y[0].tolist()
     
