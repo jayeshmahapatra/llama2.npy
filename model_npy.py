@@ -148,14 +148,8 @@ def apply_rotary_emb(
     xk_out_i = xk_r * freqs_sin + xk_i * freqs_cos
 
     # flatten last two dimensions
-    xq_out_stacked = np.stack([xq_out_r, xq_out_i], axis=-1)
-    xk_out_stacked = np.stack([xk_out_r, xk_out_i], axis=-1)
-
-    xq_out = xq_out_stacked.reshape(xq.shape)
-    xk_out = xk_out_stacked.reshape(xk.shape)
-    
-    xq_out = np.stack([xq_out_r, xq_out_i], axis=-1).reshape(xq_out.shape[:3] + (-1,))
-    xk_out = np.stack([xk_out_r, xk_out_i], axis=-1).reshape(xk_out.shape[:3] + (-1,))
+    xq_out = np.stack([xq_out_r, xq_out_i], axis=-1).reshape(xq.shape[:3] + (-1,))
+    xk_out = np.stack([xk_out_r, xk_out_i], axis=-1).reshape(xk.shape[:3] + (-1,))
 
     return xq_out.astype(xq.dtype), xk_out.astype(xk.dtype)
 
