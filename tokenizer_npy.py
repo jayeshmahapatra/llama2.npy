@@ -60,14 +60,14 @@ class Tokenizer():
                 string = self.index2vocab[tokens[i]] + self.index2vocab[tokens[i + 1]]
                 
                 # Get the ID of this merged string in vocab
-                id = self.vocab2index.get(string, None)
+                str_id = self.vocab2index.get(string, None)
 
-                if id is not None:
+                if str_id is not None:
 
-                    if self.index2vocab_score[id] > best_score:
+                    if self.index2vocab_score[str_id] > best_score:
                         # We found a better pair to merge
-                        best_score = self.index2vocab_score[id]
-                        best_id = id
+                        best_score = self.index2vocab_score[str_id]
+                        best_id = str_id
                         best_idx = i
 
             if best_idx == -1:

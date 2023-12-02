@@ -168,17 +168,18 @@ def repeat_kv(x: np.ndarray, n_rep: int) -> np.ndarray:
 class Attention():
     def __init__(self, args: ModelArgs):
         super().__init__()
+
         self.n_kv_heads = args.n_heads if args.n_kv_heads is None else args.n_kv_heads
-        assert args.n_heads % self.n_kv_heads == 0
-        model_parallel_size = 1
-        self.n_local_heads = args.n_heads // model_parallel_size
-        self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
+        self.n_local_heads = args.n_heads
+        self.n_local_kv_heads = self.n_kv_heads
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = args.dim // args.n_heads
+        
         self.wq = NumpyLinear(args.dim, args.n_heads * self.head_dim, bias=False)
         self.wk = NumpyLinear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
         self.wv = NumpyLinear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
         self.wo = NumpyLinear(args.n_heads * self.head_dim, args.dim, bias=False) 
+        
         self.attn_dropout = NumpyDropout(args.dropout) 
         self.resid_dropout = NumpyDropout(args.dropout) 
         self.dropout = args.dropout
