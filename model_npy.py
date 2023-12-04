@@ -319,10 +319,8 @@ class Transformer:
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
-        Also note this is a super inefficient version of sampling with no key/value cache.
+        Autoregressively feed the model the promt + generated tokens at each step.
+        This is a naive implementation without Key, Value cache.
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
