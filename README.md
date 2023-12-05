@@ -36,3 +36,15 @@ Here's an explanation of the command line arguments for `run_npy`:
 - `-n` or `--num_tokens`: Define the number of tokens you want the model to generate. The default value is 20.
 
 - `-w` or `--weight`: Provide the path to the binary file containing the model weights. This argument is required for the model to work properly.
+
+## Repo Structure
+
+Code Files:
+
+1. [**model_npy**](./model_npy.py): Contains the implementation of the model, along with text generation code.
+2. [**run_npy**](./run_npy.py): Contains code to create a model, load it's weights and then run inference.
+3. [**tokenizer_npy**](./tokenizer_npy.py): Contains python implementation of a BPE tokenizer.
+
+Weight Files:
+1. **tokenizer.bin**: Saved Llama2 tokenizer weights
+2. **stories15M.bin**: Saved weights for a baby llama model trained on the [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) dataset.
