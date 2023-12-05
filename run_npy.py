@@ -38,7 +38,8 @@ if __name__ == "__main__":
     if not os.path.exists(weight_filepath):
         raise ValueError('The weight file does not exist')
     
-    # Path is valid, we read from the file
+    
+    # Path is valid, we read model weights from the file
 
     # Read header information
     header_size = struct.calcsize('iiiiiii')
@@ -59,7 +60,6 @@ if __name__ == "__main__":
         data = struct.unpack(f'{num_elements}f', f.read(4 * num_elements))
 
         return np.array(data).reshape(t.shape)
-    
     
     with open(weight_filepath, 'rb') as f:
         # Skip header
@@ -111,12 +111,15 @@ if __name__ == "__main__":
 
     x = np.array([x])
     
+    # Perform inference
     y = transformer.generate(x, max_new_tokens=args.num_tokens, temperature=0.9)
 
     pt_tokens = y[0].tolist()
     
+    # Decode text
     text = enc.decode(pt_tokens)
 
+    # print text
     print(text)
 
 

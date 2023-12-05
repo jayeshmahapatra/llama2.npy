@@ -21,7 +21,7 @@ class ModelArgs:
 
 ### Nunpy based classes for the model
 
-# Define a numpy based RMSNorm class
+# Numpy based RMSNorm class
 class RMSNorm:
     def __init__(self, dim: int, eps: float):
         super().__init__()
@@ -38,7 +38,7 @@ class RMSNorm:
     def __call__(self, x):
         return self.forward(x)
     
-# Define a numpy based linear class
+# Numpy based linear class
 class NumpyLinear:
     def __init__(self, in_features: int, out_features: int, bias=True):
         self.weight = np.random.randn(out_features, in_features).astype(np.float32)
@@ -53,7 +53,7 @@ class NumpyLinear:
         else:
             return np.dot(x, self.weight.T)
         
-# Define a numpy based Token Embedding class
+# Numpy based Token Embedding class
 class NumpyEmbedding:
     def __init__(self, vocab_size: int, dim: int):
         self.weight = np.random.randn(vocab_size, dim).astype(np.float32)
@@ -66,7 +66,7 @@ class NumpyEmbedding:
         return self.weight[x]
 
 
-# Define a numpy based dropout class
+# Mumpy based dropout class
 class NumpyDropout:
     def __init__(self, p: float =0.5):
         self.p = p
