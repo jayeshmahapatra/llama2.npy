@@ -2,7 +2,7 @@
 
 `llama2.npy` is a Python+[Numpy](https://numpy.org/doc/stable/index.html) port of [llama2.c](https://github.com/karpathy/llama2.c) by Andrej Karpathy. It includes an implementation of the baby LLama2 architecture trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) and the accompanying tokenizer all using just Python and Numpy. The model weights and tokenizer scores are also from Andrej Karpathy.
 
-This repo is a companion to my blog: [llama2.npy : Implementing Llama2 LLM using just Python and Numpy](https://jayeshmahapatra.github.io/2023/12/03/llama2.html)
+This repo is a companion to my blog: [llama2.npy : Implementing Llama2 LLM using just Python and Numpy](https://jayeshmahapatra.github.io/blog/2023-12-03-llama2)
 
 <figure>
     <img src="media/llama2_npy_example_gif.gif"
